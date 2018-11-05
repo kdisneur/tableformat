@@ -7,9 +7,14 @@ set -o pipefail
 _applicationName="tableformat";
 
 _rootFolder=$(cd $(dirname ${0})/..; pwd);
+_releaseFolder=${_rootFolder}/releases;
 _configFile=${1:-~/.config/github};
+_gitRepository="kdisneur/tableformat";
 _version=$(cat VERSION);
 _currentSHA=$(git rev-parse HEAD);
+_releasePath=${_releaseFolder}/${_applicationName};
+_releaseArchiveName=${_applicationName}-${_version}.tgz;
+_releaseArchivePath=${_releaseFolder}/${_releaseArchiveName};
 
 if [ -z ${GITHUB_API_TOKEN:-} ]; then
   if [ ! -f ${_configFile} ]; then
@@ -20,6 +25,14 @@ if [ -z ${GITHUB_API_TOKEN:-} ]; then
   fi
 fi
 
+echo "Build release..."
+mkdir -p ${_releaseFolder};
+(cd ${_rootFolder}; go build -o ${_releasePath});
+(tar czf ${_releaseArchivePath} -C ${_releaseFolder} ${_applicationName} );
+
+_shasum=$(shasum -a 256 ${_releasePath} | cut -f1 -d' ');
+
+echo "Create release..."
 _release=$(
   curl \
     --silent \
@@ -34,16 +47,34 @@ _release=$(
       , "draft": false
       , "prerelease": false
       }' \
-    https://api.github.com/repos/kdisneur/tableformat/releases);
+    https://api.github.com/repos/${_gitRepository}/releases);
 
 _uploadUrl=$(
-  grep -oE "upload_url\":[ ]+\"([^\"]+)\"" <<< ${_release} \
+  grep -oE "upload_url\":[ ]*\"([^\"]+)\"" <<< ${_release} \
     | grep -oE 'https:.*assets');
 
-curl \
-  --silent \
-  --request POST \
-  --header "Authorization: bearer ${GITHUB_API_TOKEN}" \
-  --header "Content-Type: application/octet-stream" \
-  --data-binary @${_rootFolder}/${_applicationName} \
-  "${_uploadUrl}?name=${_applicationName}&label=Executable" > /dev/null;
+echo "Upload assets..."
+_asset=$(
+  curl \
+    --silent \
+    --request POST \
+    --header "Authorization: bearer ${GITHUB_API_TOKEN}" \
+    --header "Content-Type: application/x-gzip" \
+    --data-binary @${_releaseArchivePath} \
+    "${_uploadUrl}?name=${_releaseArchiveName}&label=Executable");
+
+_downloadUrl=$(
+  grep -oE "browser_download_url\":[ ]*\"([^\"]+)\"" <<< ${_asset} \
+    | grep -oE 'https:.*tgz');
+
+cat <<EOF
+class Tableformat < Formula
+  desc "Reformat illformed tables to pretty markdown or ascii tables"
+  homepage "https://github.com/${_gitRepository}"
+  url "${_downloadUrl}"
+  sha256 "${_shasum}"
+  def install
+    bin.install "${_applicationName}"
+  end
+end
+EOF

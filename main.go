@@ -16,7 +16,7 @@ You could:
   cat file | %s
 
 - inject data from a file:
-  %s < file
+  %[1]s < file
 
 - inject data with a heredoc string:
   %[1]s <<EOF
