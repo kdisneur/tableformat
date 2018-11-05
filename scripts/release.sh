@@ -30,7 +30,7 @@ mkdir -p ${_releaseFolder};
 (cd ${_rootFolder}; go build -o ${_releasePath});
 (tar czf ${_releaseArchivePath} -C ${_releaseFolder} ${_applicationName} );
 
-_shasum=$(shasum -a 256 ${_releasePath} | cut -f1 -d' ');
+_shasum=$(shasum -a 256 ${_releaseArchivePath} | cut -f1 -d' ');
 
 echo "Create release..."
 _release=$(
